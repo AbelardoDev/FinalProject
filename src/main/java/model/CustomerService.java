@@ -14,6 +14,7 @@ public class CustomerService {
     private List<Client> attendedClients;
     private Stack<Action> actionsHistory;
     private LocalDateTime currentTime;
+    private Client tempClient;
 
     public CustomerService() {
         waitingClients = new ArrayDeque<>();
@@ -29,9 +30,12 @@ public class CustomerService {
         waitingClients.remove(client);
     }
 
-    public void addAttendedClient(Client client) {
-        attendedClients.add(client);
-        waitingClients.remove(client);
+    public void attendClient() {
+        tempClient = waitingClients.poll();
+    }
+
+    public void addAttendedClient() {
+        attendedClients.add(tempClient);
     }
 
     public Client searchClientById(int id) {

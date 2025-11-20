@@ -1,6 +1,7 @@
 package view;
 
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 public class View extends javax.swing.JFrame {
