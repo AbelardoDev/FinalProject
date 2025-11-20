@@ -10,14 +10,15 @@ import java.util.Stack;
 
 @Getter
 public class CustomerService {
-    ArrayDeque<Client> waitingClients;
-    List<Client> attendedClients;
-    Stack<Action> actionsHistory;
-    LocalDateTime currentTime;
+    private ArrayDeque<Client> waitingClients;
+    private List<Client> attendedClients;
+    private Stack<Action> actionsHistory;
+    private LocalDateTime currentTime;
 
     public CustomerService() {
         waitingClients = new ArrayDeque<>();
         attendedClients = new ArrayList<>();
+        actionsHistory = new Stack<>();
     }
 
     public void addClient(Client client) {
@@ -31,14 +32,6 @@ public class CustomerService {
     public void addAttendedClient(Client client) {
         attendedClients.add(client);
         waitingClients.remove(client);
-    }
-
-    public String printAttendedClients() {
-        StringBuilder sb = new StringBuilder();
-        for (Client c : attendedClients) {
-            sb.append(c.toString()).append("\n");
-        }
-        return sb.toString();
     }
 
     public Client searchClientById(int id) {
