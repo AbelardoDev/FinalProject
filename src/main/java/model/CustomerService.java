@@ -2,7 +2,8 @@ package model;
 
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import javax.swing.*;
+import java.time.LocalTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,13 +14,16 @@ public class CustomerService {
     private ArrayDeque<Client> waitingClients;
     private List<Client> attendedClients;
     private Stack<Action> actionsHistory;
-    private LocalDateTime currentTime;
+    private LocalTime beginTime;
+    private LocalTime endTime;
+    private List<Integer> attendTime;
     private Client tempClient;
 
     public CustomerService() {
         waitingClients = new ArrayDeque<>();
         attendedClients = new ArrayList<>();
         actionsHistory = new Stack<>();
+        attendTime = new ArrayList<>();
     }
 
     public void addClient(Client client) {
@@ -39,7 +43,7 @@ public class CustomerService {
     }
 
     public Client searchClientById(int id) {
-        for (Client c : waitingClients) {
+        for (Client c : attendedClients) {
             if(c.id() == id)
                 return c;
         }
@@ -48,7 +52,7 @@ public class CustomerService {
 
     public List<Client> searchClientByCategory(RequestType requestType) {
         List<Client> clients = new ArrayList<>();
-        for (Client c : waitingClients) {
+        for (Client c : attendedClients) {
             if(c.requestType() == requestType){
                 clients.add(c);
             }
@@ -56,15 +60,45 @@ public class CustomerService {
         return clients;
     }
 
-    public void registerAction(Client client, ActionType actionType) {
-        if(ActionType.ADD == actionType){
-
-        }
+    public void registerAction(ActionType actionType, Client client) {
+        actionsHistory.addFirst(new Action(actionType, client));
     }
 
-    public void showActions() {
-        for (Action a : actionsHistory) {
-            System.out.println(a);
+    public void showInfoClient(Client client) {
+        JOptionPane.showMessageDialog(null, client);
+    }
+
+    public Client getClientWithAction(int id) {
+        return actionsHistory.get(id).getClient();
+    }
+
+    private int attentionSeconds(){
+        return endTime.toSecondOfDay() - beginTime.toSecondOfDay();
+    }
+
+    public void addAttendTime() {
+        attendTime.add(attentionSeconds());
+    }
+
+    public void setBeginTime(){
+        beginTime = LocalTime.now();
+    }
+
+    public void setEndTime(){
+        endTime = LocalTime.now();
+    }
+
+    public String averageTime(){
+        if (attendTime == null || attendTime.isEmpty()) {
+            return "0 m 0 s";
         }
+        int totalSeconds = 0;
+        for (Integer i : attendTime) {
+            totalSeconds += i;
+        }
+        int secondsAverage = totalSeconds / attendTime.size();
+        int minutes = secondsAverage / 60;
+        int seconds = secondsAverage % 60;
+        return minutes + " m " + seconds + " s";
     }
 }

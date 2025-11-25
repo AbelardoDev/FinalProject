@@ -1,7 +1,10 @@
 package model;
 
+import lombok.Getter;
+
 import java.time.LocalDateTime;
 
+@Getter
 public class Action {
     private ActionType type;
     private Client client;

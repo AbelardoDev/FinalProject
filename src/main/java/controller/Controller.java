@@ -1,26 +1,32 @@
 package controller;
 
-import model.Client;
-import model.CustomerService;
-import model.Priority;
-import model.RequestType;
+import model.*;
+import model.Action;
 import view.AddClientView;
+import view.SearchView;
+import view.TaskHistoryView;
 import view.View;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import java.util.ArrayDeque;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Controller {
     private CustomerService model;
     private View view;
     private AddClientView addClientView;
+    private TaskHistoryView taskHistoryView;
+    private SearchView searchView;
     private boolean attend;
 
     public Controller() {
         model = new CustomerService();
         view = new View();
         addClientView = new AddClientView();
+        taskHistoryView = new TaskHistoryView();
+        searchView = new SearchView();
         attend = true;
         events();
     }
@@ -55,6 +61,18 @@ public class Controller {
         }
     }
 
+    public void historyTable(){
+        DefaultTableModel tModel = (DefaultTableModel) taskHistoryView.getTaskTable().getModel();
+        cleanTable(tModel);
+        Object[] rows =  new Object[3];
+        for(Action a : model.getActionsHistory()){
+            rows[0] = a.getType();
+            rows[1] = a.getClient().name();
+            rows[2] = DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(a.getDate());
+            tModel.addRow(rows);
+        }
+    }
+
     public void cleanTable(DefaultTableModel model){
         model.setRowCount(0);
     }
@@ -77,7 +95,9 @@ public class Controller {
         String name = addClientView.getTflName().getText();
         RequestType rt = requestType();
         Priority priority = priority();
-        model.addClient(new Client(id, name, rt, priority));
+        Client client = new Client(id, name, rt, priority);
+        model.addClient(client);
+        model.registerAction(ActionType.ADD, client);
         waitingTable();
         closeAddClient();
         count();
@@ -106,6 +126,7 @@ public class Controller {
         } else if (!attend) {
             JOptionPane.showMessageDialog(null, "Aún no ha terminado de atender al cliente actual.");
         } else {
+            model.setBeginTime();
             model.attendClient();
             view.getTxtAttend().setText(model.getTempClient().name() + " está siendo atendido.");
             waitingTable();
@@ -118,26 +139,71 @@ public class Controller {
         if(attend) {
             JOptionPane.showMessageDialog(null, "No está atendiendo a ningún cliente.");
         } else {
+            model.setEndTime();
+            model.addAttendTime();
+            timeAverage();
             model.addAttendedClient();
             view.getTxtAttend().setText(model.getTempClient().name() + " fue atendido exitosamente.");
             attendTable();
             count();
             attend = true;
+            model.registerAction(ActionType.ATTEND, model.getTempClient());
         }
+    }
+
+    private void timeAverage() {
+        view.getLblAverageTime().setText("Tiempo promedio de atención: " + model.averageTime());
     }
 
     private void removeClient() {
         if(view.getWaitingTable().getSelectedRow() == -1) {
             JOptionPane.showMessageDialog(null, "Seleccione el cliente que desea eliminar.");
         } else {
-            model.removeClient(model.searchClientById(Integer.parseInt(view.getWaitingTable().getValueAt(view.getWaitingTable().getSelectedRow(), 0).toString())));
+            Client client = model.searchClientById(Integer.parseInt(view.getWaitingTable().getValueAt(view.getWaitingTable().getSelectedRow(), 0).toString()));
+            model.removeClient(client);
             waitingTable();
             count();
+            model.registerAction(ActionType.REMOVE, client);
         }
     }
 
     private void searchClient() {
+        if(view.getJToggleButton().isSelected())
+            searchById();
+        else
+            searchTable();
+    }
 
+    private void searchById() {
+        int id = Integer.parseInt(view.getTflId().getText());
+        if(model.searchClientById(id) == null)
+            JOptionPane.showMessageDialog(null, "Cliente no encontrado.");
+        else
+            model.showInfoClient(model.searchClientById(id));
+    }
+
+    private List<Client> searchByCategory() {
+        List<Client> clients = new ArrayList<>();
+        return switch (view.getCbxRequestType().getSelectedIndex()) {
+            case 0 -> model.searchClientByCategory(RequestType.SUPPORT);
+            case 1 -> model.searchClientByCategory(RequestType.MAINTENANCE);
+            case 2 -> model.searchClientByCategory(RequestType.CLAIM);
+            default -> null;
+        };
+    }
+
+    private void searchTable() {
+        DefaultTableModel tModel = (DefaultTableModel) searchView.getJTable1().getModel();
+        cleanTable(tModel);
+        Object[] rows =  new Object[4];
+        for(Client c : searchByCategory()){
+            rows[0] = c.id();
+            rows[1] = c.name();
+            rows[2] = c.requestType();
+            rows[3] = c.priority();
+            tModel.addRow(rows);
+        }
+        searchView.setVisible(true);
     }
 
     private void undo() {
@@ -145,7 +211,12 @@ public class Controller {
     }
 
     private void history() {
+        taskHistoryView.setVisible(true);
+        historyTable();
+    }
 
+    private void infoClient() {
+        model.showInfoClient(model.getClientWithAction(taskHistoryView.getTaskTable().getSelectedRow()));
     }
 
     private void simulation() {
@@ -162,5 +233,7 @@ public class Controller {
         view.getBtnHistory().addActionListener(e -> history());
         view.getBtnSimulation().addActionListener(e -> simulation());
         addClientView.getBtnAddClient().addActionListener(e -> addClient());
+        taskHistoryView.getBtnInfoClient().addActionListener(e -> infoClient());
+        taskHistoryView.getBtnUndo().addActionListener(e -> undo());
     }
 }
