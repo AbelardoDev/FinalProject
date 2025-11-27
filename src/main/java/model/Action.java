@@ -6,13 +6,15 @@ import java.time.LocalDateTime;
 
 @Getter
 public class Action {
-    private ActionType type;
-    private Client client;
-    private LocalDateTime date;
-    public Action(ActionType type, Client client) {
+    private final ActionType type;
+    private final Client client;
+    private final LocalDateTime date;
+    private String text;
+    public Action(ActionType type, Client client, String text) {
         this.type = type;
         this.client = client;
         this.date = LocalDateTime.now();
+        this.text = text;
     }
 
     @Override

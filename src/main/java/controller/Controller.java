@@ -2,23 +2,21 @@ package controller;
 
 import model.*;
 import model.Action;
-import view.AddClientView;
-import view.SearchView;
-import view.TaskHistoryView;
-import view.View;
+import view.*;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Controller {
-    private CustomerService model;
-    private View view;
-    private AddClientView addClientView;
-    private TaskHistoryView taskHistoryView;
-    private SearchView searchView;
+    private final CustomerService model;
+    private final View view;
+    private final AddClientView addClientView;
+    private final TaskHistoryView taskHistoryView;
+    private final SearchView searchView;
     private boolean attend;
 
     public Controller() {
@@ -68,7 +66,7 @@ public class Controller {
         for(Action a : model.getActionsHistory()){
             rows[0] = a.getType();
             rows[1] = a.getClient().name();
-            rows[2] = DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(a.getDate());
+            rows[2] = a.getDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy - HH:mm:ss"));
             tModel.addRow(rows);
         }
     }
@@ -97,10 +95,11 @@ public class Controller {
         Priority priority = priority();
         Client client = new Client(id, name, rt, priority);
         model.addClient(client);
-        model.registerAction(ActionType.ADD, client);
         waitingTable();
         closeAddClient();
         count();
+        model.registerAction(ActionType.ADD, client, view.getTxtAttend().getText());
+        view.getTxtAttend().setText(client.name() + " fue ingresado a la cola de espera.");
     }
 
     private RequestType requestType() {
@@ -128,6 +127,7 @@ public class Controller {
         } else {
             model.setBeginTime();
             model.attendClient();
+            model.getTempText().push(view.getTxtAttend().getText());
             view.getTxtAttend().setText(model.getTempClient().name() + " está siendo atendido.");
             waitingTable();
             count();
@@ -143,11 +143,11 @@ public class Controller {
             model.addAttendTime();
             timeAverage();
             model.addAttendedClient();
-            view.getTxtAttend().setText(model.getTempClient().name() + " fue atendido exitosamente.");
             attendTable();
             count();
             attend = true;
-            model.registerAction(ActionType.ATTEND, model.getTempClient());
+            model.registerAction(ActionType.ATTEND, model.getTempClient(), view.getTxtAttend().getText());
+            view.getTxtAttend().setText(model.getTempClient().name() + " fue atendido exitosamente.");
         }
     }
 
@@ -159,11 +159,13 @@ public class Controller {
         if(view.getWaitingTable().getSelectedRow() == -1) {
             JOptionPane.showMessageDialog(null, "Seleccione el cliente que desea eliminar.");
         } else {
-            Client client = model.searchClientById(Integer.parseInt(view.getWaitingTable().getValueAt(view.getWaitingTable().getSelectedRow(), 0).toString()));
+            Client client = model.getClientById(Integer.parseInt(view.getWaitingTable().getValueAt(view.getWaitingTable().getSelectedRow(), 0).toString()));
+            model.getRemovePositions().addFirst(view.getWaitingTable().getSelectedRow());
             model.removeClient(client);
             waitingTable();
             count();
-            model.registerAction(ActionType.REMOVE, client);
+            model.registerAction(ActionType.REMOVE, client, view.getTxtAttend().getText());
+            view.getTxtAttend().setText(client.name() + " fue eliminado de la cola de espera.");
         }
     }
 
@@ -207,12 +209,66 @@ public class Controller {
     }
 
     private void undo() {
-        count();
+        if(model.getActions().isEmpty()){
+            JOptionPane.showMessageDialog(null, "No hay acciones para deshacer.");
+        } else {
+            ActionType action = model.getActions().getLast().getType();
+            switch (action) {
+                case ADD -> addUndo();
+                case ATTEND -> attendUndo();
+                case REMOVE -> removeUndo();
+            }
+            count();
+            model.registerAction(ActionType.UNDO, new Client(0, action.toString(), RequestType.SUPPORT, Priority.NORMAL), "");
+        }
+    }
+
+    private void addUndo() {
+        Action action = model.getActions().pop();
+        model.getWaitingClients().removeLast();
+        view.getTxtAttend().setText(action.getText());
+        waitingTable();
+    }
+
+    private void attendUndo() {
+        Action action = model.getActions().pop();
+        model.getAttendedClients().removeLast();
+        model.getWaitingClients().addFirst(action.getClient());
+        model.getAttendTime().removeLast();
+        view.getTxtAttend().setText(model.getTempText().pop());
+        timeAverage();
+        waitingTable();
+        attendTable();
+    }
+
+    private void removeUndo() {
+        Action action = model.getActions().pop();
+        model.setWaitingClients(insertInPosition(action.getClient(), model.getRemovePositions().pop()));
+        view.getTxtAttend().setText(action.getText());
+        waitingTable();
+    }
+
+    private ArrayDeque<Client> insertInPosition(Client newClient, int position){
+        int i = 0;
+        ArrayDeque<Client> temp = new ArrayDeque<>();
+        for(Client c : model.getWaitingClients()){
+            if(i == position)
+                temp.add(newClient);
+            temp.add(c);
+            i++;
+        }
+        if(model.getWaitingClients().size() == position)
+            temp.add(newClient);
+        return temp;
     }
 
     private void history() {
-        taskHistoryView.setVisible(true);
-        historyTable();
+        if(model.getActionsHistory().isEmpty()){
+            JOptionPane.showMessageDialog(null, "Aún no ha realizado acciones.");
+        } else {
+            taskHistoryView.setVisible(true);
+            historyTable();
+        }
     }
 
     private void infoClient() {
@@ -220,7 +276,7 @@ public class Controller {
     }
 
     private void simulation() {
-
+        simulator();
     }
 
     public void events(){
@@ -235,5 +291,75 @@ public class Controller {
         addClientView.getBtnAddClient().addActionListener(e -> addClient());
         taskHistoryView.getBtnInfoClient().addActionListener(e -> infoClient());
         taskHistoryView.getBtnUndo().addActionListener(e -> undo());
+    }
+
+    private void simulator(){
+        model.setTimer(new Timer(2500, e -> {
+            step(model.getCurrentStep());
+        }));
+        model.getTimer().start();
+    }
+
+    private void step(int step){
+        switch (step){
+            case 0 -> {
+                addClientView.getTflId().setText("1007");
+                addClientView.getTflName().setText("Tralalelo");
+                addClientView.getCbxRequestType().setSelectedIndex(1);
+                addClientView.getCbxPriority().setSelectedIndex(1);
+                addClient();
+            }
+            case 1 -> {
+                addClientView.getTflId().setText("56124");
+                addClientView.getTflName().setText("Tralalá");
+                addClientView.getCbxRequestType().setSelectedIndex(1);
+                addClientView.getCbxPriority().setSelectedIndex(0);
+                addClient();
+                int index = view.getWaitingTable().getRowCount() - 2;
+                view.getWaitingTable().setRowSelectionInterval(index, index);
+            }
+            case 2 -> {
+                removeClient();
+            }
+            case 3 -> {
+                undo();
+            }
+            case 4 -> {
+                attendClient();
+            }
+            case 5 -> {
+                endAttendClient();
+            }
+            case 6 -> {
+                attendClient();
+            }
+            case 7 -> {
+                endAttendClient();
+            }
+            case 8 -> {
+                attendClient();
+            }
+            case 9 -> {
+                endAttendClient();
+            }
+            case 10 -> {
+                view.getCbxRequestType().setSelectedIndex(1);
+                searchClient();
+            }
+            case 11 -> {
+                searchView.setVisible(false);
+            }
+            case 12 -> {
+                view.getJToggleButton().setSelected(true);
+                view.getTflId().setText("1007");
+                searchClient();
+            }
+            case 13 -> {
+                history();
+                model.getTimer().stop();
+            }
+        }
+        step++;
+        model.setCurrentStep(step);
     }
 }
